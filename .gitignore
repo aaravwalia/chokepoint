@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+# Raw API response cache: ~6MB, regenerable with `python build.py`.
+# The analysed snapshot in data/ecosystem.json.gz is committed instead --
+# that is what the app actually reads, and it makes the demo network-free.
+data/cache/
+
+# Local editor / agent tooling
+.claude/
