@@ -2,6 +2,8 @@
 
 **Supply-chain risk scored by structural position, not severity.**
 
+Live demo: https://aaravwalia.github.io/chokepoint/
+
 A package with no known vulnerability, sitting beneath 4,000 downstream
 packages, maintained by one unpaid person, is a larger risk than a medium CVE
 in a leaf. Conventional scanners evaluate packages one at a time and cannot see

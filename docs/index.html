@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chokepoint</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<style>
+  :root{
+    --bg:#0B0E14; --panel:#11151F; --panel2:#161B28; --line:#232A3A;
+    --ink:#E6EAF2; --muted:#8A94A8; --dim:#5C6679;
+    --hot:#FF4D4D; --warn:#FFA940; --ok:#3DDC97; --accent:#5B8DEF;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;overflow:hidden;background:var(--bg);color:var(--ink);
+       font:13px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  header{height:52px;display:flex;align-items:center;gap:16px;padding:0 18px;
+         border-bottom:1px solid var(--line);background:var(--panel)}
+  .brand{font-weight:700;font-size:15px;letter-spacing:-.01em}
+  .brand span{color:var(--hot)}
+  .tag{font:11px/1 var(--mono);color:var(--muted);border:1px solid var(--line);
+       padding:5px 8px;border-radius:5px}
+  .grow{flex:1}
+  #search{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+          padding:8px 12px;border-radius:6px;width:280px;font:12px var(--mono);outline:none}
+  #search:focus{border-color:var(--accent)}
+  main{display:grid;grid-template-columns:330px 1fr 340px;height:calc(100vh - 52px)}
+  .col{overflow-y:auto;background:var(--panel)}
+  .col.left{border-right:1px solid var(--line)}
+  .col.right{border-left:1px solid var(--line)}
+  .hd{padding:11px 14px;font:11px/1 var(--mono);letter-spacing:.09em;
+      text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);
+      position:sticky;top:0;background:var(--panel);z-index:5}
+  .row{display:flex;align-items:center;gap:9px;padding:9px 14px;cursor:pointer;
+       border-bottom:1px solid rgba(35,42,58,.5)}
+  .row:hover{background:var(--panel2)}
+  .row.sel{background:#16203A;box-shadow:inset 2px 0 0 var(--accent)}
+  .rank{font:10px var(--mono);color:var(--dim);width:20px;flex:none}
+  .nm{flex:1;font:12px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sc{font:11px var(--mono);font-weight:700;width:38px;text-align:right;flex:none}
+  .bar{height:3px;border-radius:2px;background:var(--line);margin-top:4px;overflow:hidden}
+  .bar i{display:block;height:100%}
+  #cy{width:100%;height:100%;background:
+      radial-gradient(circle at 50% 45%,#141A28 0%,#0B0E14 72%)}
+  .center{position:relative;overflow:hidden}
+  .overlay{position:absolute;left:16px;top:14px;pointer-events:none;z-index:3}
+  .otitle{font:600 15px var(--mono)}
+  .osub{font:11px var(--mono);color:var(--muted);margin-top:3px}
+  .ctrls{position:absolute;left:16px;bottom:16px;display:flex;gap:8px;z-index:4}
+  button{font:600 12px system-ui;border:1px solid var(--line);background:var(--panel2);
+         color:var(--ink);padding:9px 14px;border-radius:6px;cursor:pointer}
+  button:hover{border-color:var(--dim)}
+  button.det{background:var(--hot);border-color:var(--hot);color:#fff}
+  button.det:hover{filter:brightness(1.12)}
+  button:disabled{opacity:.45;cursor:default}
+  .legend{position:absolute;right:14px;bottom:14px;font:10px var(--mono);
+          color:var(--dim);text-align:right;z-index:3;line-height:1.8}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
+  .pad{padding:14px}
+  .k{font:10px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+  .v{font:12px var(--mono);margin-top:2px}
+  .big{font:700 30px var(--mono);line-height:1.1}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+  .why{border-left:2px solid var(--warn);padding:6px 0 6px 10px;margin:6px 0;
+       font-size:11.5px;color:#D8C3A0}
+  .path{font:11px var(--mono);padding:7px 9px;background:var(--panel2);
+        border-radius:5px;margin:5px 0;color:var(--muted);
+        overflow-x:auto;white-space:nowrap}
+  .path b{color:var(--hot);font-weight:600}
+  .path i{color:var(--dim);font-style:normal}
+  .fix{display:flex;justify-content:space-between;gap:8px;padding:8px 0;
+       border-bottom:1px solid rgba(35,42,58,.6);font:11px var(--mono)}
+  .muted{color:var(--muted)} .hot{color:var(--hot)} .warn{color:var(--warn)} .ok{color:var(--ok)}
+  .banner{margin:0 0 12px;padding:10px 12px;background:#1A1220;
+          border:1px solid #3A2033;border-radius:6px;font-size:11.5px;color:#E7C6D8}
+  .empty{padding:34px 16px;text-align:center;color:var(--dim);font-size:12px}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#222A3A;border-radius:5px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">CHOKE<span>POINT</span></div>
+  <div class="tag" id="corpus">loading corpus…</div>
+  <div class="grow"></div>
+  <input id="search" placeholder="search package…" autocomplete="off" spellcheck="false">
+</header>
+
+<main>
+  <div class="col left">
+    <div class="hd">Chokepoint ranking</div>
+    <div id="list"><div class="empty">loading…</div></div>
+  </div>
+
+  <div class="center">
+    <div id="cy"></div>
+    <div class="overlay">
+      <div class="otitle" id="gt">—</div>
+      <div class="osub" id="gs">select a package</div>
+    </div>
+    <div class="ctrls">
+      <button class="det" id="btnDet" disabled>Detonate</button>
+      <button id="btnFit">Fit</button>
+      <button id="btnReset">Reset</button>
+    </div>
+    <div class="legend">
+      <div><span class="dot" style="background:var(--hot)"></span>origin</div>
+      <div><span class="dot" style="background:var(--warn)"></span>fragile dependent</div>
+      <div><span class="dot" style="background:var(--accent)"></span>ecosystem root</div>
+      <div style="margin-top:4px">node size = weekly downloads</div>
+    </div>
+  </div>
+
+  <div class="col right">
+    <div class="hd">Detail</div>
+    <div id="detail"><div class="empty">Pick a package from the ranking,<br>or search above.</div></div>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const BUNDLE_URL = 'bundle.json';
+let BUNDLE = null;
+const api = async (p) => {
+  if (!BUNDLE) BUNDLE = await fetch(BUNDLE_URL).then(r => r.json());
+  const [path, query] = p.split('?');
+  const parts = path.replace(/^\/api\//, '').split('/');
+  const kind = parts[0];
+  const name = decodeURIComponent(parts.slice(1).join('/'));
+  if (kind === 'stats') return BUNDLE.stats;
+  if (kind === 'ranking') return { ranking: BUNDLE.ranking };
+  if (kind === 'search') {
+    const q = (new URLSearchParams(query).get('q') || '').toLowerCase();
+    const names = BUNDLE.names;
+    const exact = names.filter(n => n.toLowerCase() === q);
+    const starts = names.filter(n => n.toLowerCase().startsWith(q) && !exact.includes(n));
+    const has = names.filter(n => n.toLowerCase().includes(q)
+                  && !exact.includes(n) && !starts.includes(n));
+    return { results: exact.concat(starts, has).slice(0, 12) };
+  }
+  const entry = BUNDLE.packages[name];
+  if (!entry) return Promise.reject(404);
+  if (kind === 'package') return entry.detail;
+  if (kind === 'graph') return entry.graph;
+  if (kind === 'cone') return entry.cone || entry.graph;
+  if (kind === 'detonate') return entry.detonate;
+  if (kind === 'intervention') return entry.intervention;
+  return Promise.reject(404);
+};
+const fmt = n => n >= 1e9 ? (n/1e9).toFixed(2)+'B' : n >= 1e6 ? (n/1e6).toFixed(0)+'M'
+              : n >= 1e3 ? (n/1e3).toFixed(0)+'K' : String(n);
+const risk = s => s >= 70 ? 'var(--hot)' : s >= 45 ? 'var(--warn)' : s >= 25 ? '#C9CF5F' : 'var(--ok)';
+
+let cy, current = null, ranking = [], isCone = false;
+
+cy = cytoscape({
+  container: $('#cy'),
+  style: [
+    { selector:'node', style:{
+        'background-color':'#2E3950','label':'data(label)','color':'#7D8799',
+        'font-size':'7px','font-family':'monospace','text-valign':'center',
+        'text-halign':'center','width':'data(sz)','height':'data(sz)',
+        'border-width':1,'border-color':'#161B28','text-opacity':0 }},
+    { selector:'node[?showLabel]', style:{'text-opacity':1,'color':'#AEB7C8'}},
+    { selector:'node.origin', style:{
+        'background-color':'#FF4D4D','border-color':'#FF9090','border-width':3,
+        'color':'#fff','font-size':'11px','font-weight':'bold','text-opacity':1,
+        'z-index':99 }},
+    { selector:'node.rootpkg', style:{'background-color':'#5B8DEF','border-color':'#93B4F5'}},
+    { selector:'node.fragile', style:{'background-color':'#FFA940'}},
+    { selector:'node.hit', style:{
+        'background-color':'#FF4D4D','border-color':'#FF8A8A','border-width':2,
+        'text-opacity':1,'color':'#FFD5D5'}},
+    { selector:'node.dim', style:{'opacity':.16}},
+    { selector:'edge', style:{
+        'width':1,'line-color':'#242C3D','curve-style':'bezier',
+        'target-arrow-shape':'triangle','target-arrow-color':'#242C3D','arrow-scale':.5}},
+    { selector:'edge.hit', style:{'line-color':'#FF4D4D','target-arrow-color':'#FF4D4D','width':1.8,'opacity':.85}},
+    { selector:'edge.dim', style:{'opacity':.05}}
+  ],
+  layout:{name:'concentric'}, wheelSensitivity:.22
+});
+
+// ---------- boot ----------
+api('/api/stats').then(s => {
+  $('#corpus').textContent =
+    `${s.packages.toLocaleString()} packages · ${s.edges.toLocaleString()} edges · `
+    + `${s.with_vulns} known CVE${s.with_vulns===1?'':'s'} · ${s.solo_maintainer} solo-maintained`;
+});
+
+api('/api/ranking?limit=60').then(d => {
+  ranking = d.ranking;
+  $('#list').innerHTML = ranking.map((r,i) => `
+    <div class="row" data-p="${r.package}">
+      <div class="rank">${String(i+1).padStart(2,'0')}</div>
+      <div style="flex:1;min-width:0">
+        <div class="nm">${r.package}</div>
+        <div class="bar"><i style="width:${r.score}%;background:${risk(r.score)}"></i></div>
+      </div>
+      <div class="sc" style="color:${risk(r.score)}">${r.score.toFixed(0)}</div>
+    </div>`).join('');
+  document.querySelectorAll('.row').forEach(el =>
+    el.onclick = () => select(el.dataset.p));
+  select(ranking[0].package);
+});
+
+// ---------- selection ----------
+async function select(name){
+  current = name;
+  document.querySelectorAll('.row').forEach(r =>
+    r.classList.toggle('sel', r.dataset.p === name));
+  $('#btnDet').disabled = false;
+  $('#gt').textContent = name;
+  $('#gs').textContent = 'loading graph…';
+
+  const enc = encodeURIComponent(name);
+  let [pkg, g] = await Promise.all([
+    api('/api/package/'+enc), api('/api/graph/'+enc)
+  ]);
+
+  // An application root has no dependents inside the corpus, so its blast
+  // radius is empty and uninformative. Its exposure runs downward instead,
+  // into what it consumes -- show that.
+  isCone = g.nodes.length <= 1;
+  if(isCone) g = await api('/api/cone/'+enc);
+
+  renderDetail(pkg);
+  renderGraph(g, pkg);
+  $('#btnDet').textContent = isCone ? 'Trace exposure' : 'Detonate';
+}
+
+function renderGraph(g, pkg){
+  const maxDl = Math.max(...g.nodes.map(n=>n.downloads), 1);
+  const els = [
+    ...g.nodes.map(n => ({ data:{
+        id:n.id, label:n.id,
+        sz: 9 + 30*Math.sqrt(n.downloads/maxDl),
+        showLabel: n.origin || n.is_root || n.downloads > maxDl*0.28 ? 1 : 0,
+        level:n.level }})),
+    ...g.edges.map(e => ({ data:{ id:e.source+'>'+e.target, source:e.source, target:e.target }}))
+  ];
+  cy.elements().remove();
+  cy.add(els);
+  cy.nodes().forEach(n=>{
+    const d = g.nodes.find(x=>x.id===n.id());
+    if(d.origin) n.addClass('origin');
+    else if(d.is_root) n.addClass('rootpkg');
+    else if(d.fragility >= 0.6) n.addClass('fragile');
+  });
+  cy.layout({ name:'concentric', concentric: n => 10 - (n.data('level')||0),
+              levelWidth: () => 1, minNodeSpacing: 16, animate:false }).run();
+  cy.fit(undefined, 40);
+  $('#gs').textContent = isCone
+    ? `application root · ${g.nodes.length} packages in its dependency cone`
+      + `${g.truncated?' (capped)':''} · nothing in the corpus depends on it`
+    : `${g.nodes.length} nodes in blast radius${g.truncated?' (capped)':''} · `
+      + `${fmt(pkg.downstream_downloads)} downstream weekly downloads`;
+}
+
+function renderDetail(p){
+  const frag = Math.round(p.fragility*100);
+  $('#detail').innerHTML = `
+    <div class="pad">
+      ${p.vulns.length===0 ? `<div class="banner">
+        <b>No known CVE at the resolved version.</b><br>
+        A severity scanner reports this package as clean. Its risk is positional.
+      </div>` : `<div class="banner" style="background:#1C1418;border-color:#4A2530;color:#F0C0C0">
+        <b>${p.vulns.length} known advisor${p.vulns.length===1?'y':'ies'}</b><br>
+        <span style="font:10px var(--mono)">${p.vulns.slice(0,4).join(' · ')}</span></div>`}
+
+      <div class="k">Chokepoint score</div>
+      <div class="big" style="color:${risk(p.score)}">${p.score.toFixed(1)}</div>
+      <div class="bar" style="height:5px"><i style="width:${p.score}%;background:${risk(p.score)}"></i></div>
+
+      <div class="grid2">
+        <div><div class="k">Blast radius</div><div class="v hot">${p.blast_count} packages</div></div>
+        <div><div class="k">Downstream / wk</div><div class="v">${fmt(p.downstream_downloads)}</div></div>
+        <div><div class="k">Direct dependents</div><div class="v">${p.direct_dependents}</div></div>
+        <div><div class="k">Own downloads</div><div class="v">${fmt(p.own_downloads)}</div></div>
+        <div><div class="k">Maintainers</div><div class="v ${p.maintainers===1?'warn':''}">${p.maintainers||'—'}</div></div>
+        <div><div class="k">Fragility</div><div class="v ${frag>=60?'warn':''}">${frag}%</div></div>
+      </div>
+
+      ${p.reasons.length ? `<div class="k">Why it scores</div>
+        ${p.reasons.map(r=>`<div class="why">${r}</div>`).join('')}` : ''}
+
+      <div class="k" style="margin-top:14px">Last publish</div>
+      <div class="v muted">${p.last_publish ? p.last_publish.slice(0,10) : 'unknown'}</div>
+
+      <div id="sim"></div>
+    </div>`;
+}
+
+// ---------- detonate ----------
+$('#btnDet').onclick = async () => {
+  if(!current) return;
+  const btn = $('#btnDet'); btn.disabled = true; btn.textContent = 'Propagating…';
+
+  const d = await api('/api/detonate/'+encodeURIComponent(current));
+
+  if(d.affected_count === 0){
+    const fx = await api('/api/intervention/'+encodeURIComponent(current));
+    $('#sim').innerHTML = `
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+        <div class="k">Simulated compromise</div>
+        <div class="v muted" style="margin-top:6px">
+          Nothing in this corpus depends on <b>${current}</b> &mdash; it is an
+          application root, not a chokepoint. Compromising it harms its own
+          users, but it cannot ripple outward through the ecosystem.
+          Its exposure runs the other way.
+        </div>
+        ${fx.options.length ? `<div class="k" style="margin-top:14px">
+          Highest-leverage single fix</div>
+          <div class="v muted" style="margin:4px 0 8px">
+            Of the packages it pulls in, pinning one of these removes the most
+            transitive exposure:</div>
+          ${fx.options.slice(0,5).map(o=>`<div class="fix">
+            <span>pin <b class="ok">${o.pin}</b></span>
+            <span class="muted">&minus;${o.removes} deps · ${o.pct_of_cone}%</span>
+            </div>`).join('')}` : ''}
+      </div>`;
+    btn.textContent = isCone ? 'Trace exposure' : 'Detonate';
+    btn.disabled = false;
+    return;
+  }
+
+  cy.elements().addClass('dim');
+  const origin = cy.getElementById(current);
+  origin.removeClass('dim').addClass('hit');
+
+  const levels = Object.keys(d.by_level).map(Number).sort((a,b)=>a-b);
+  for(const lv of levels){
+    await new Promise(r => setTimeout(r, 620));
+    d.by_level[String(lv)].forEach(nm => {
+      const n = cy.getElementById(nm);
+      if(n.length){
+        n.removeClass('dim').addClass('hit');
+        n.connectedEdges().forEach(e=>{
+          if(!e.target().hasClass('dim') && !e.source().hasClass('dim'))
+            e.removeClass('dim').addClass('hit');
+        });
+      }
+    });
+    $('#gs').textContent = `hop ${lv} — ${d.by_level[String(lv)].length} packages compromised`;
+  }
+
+  $('#gs').textContent =
+    `${d.affected_count} packages · ${fmt(d.affected_downloads_per_week)} weekly downloads `
+    + `· ${d.root_coverage_pct}% of tracked ecosystem roots`;
+
+  const fixes = await api('/api/intervention/'+encodeURIComponent(current));
+  $('#sim').innerHTML = `
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+      <div class="k">Simulated compromise</div>
+      <div class="big hot" style="font-size:23px;margin:6px 0">
+        ${d.affected_count} packages</div>
+      <div class="v muted">${fmt(d.affected_downloads_per_week)} weekly downloads affected ·
+        reaches ${d.ecosystem_roots_hit.length} of ${d.roots_total} tracked
+        ecosystem roots (${d.root_coverage_pct}%)</div>
+
+      ${d.sample_paths.length ? `<div class="k" style="margin-top:14px">Propagation paths</div>
+        ${d.sample_paths.slice(0,5).map(p =>
+          `<div class="path"><b>${p.path[0]}</b>${p.path.slice(1).map(s=>
+            ` <i>&rarr;</i> ${s}`).join('')}</div>`).join('')}` : ''}
+
+      ${fixes.options.length ? `<div class="k" style="margin-top:14px">
+        Highest-leverage single fix</div>
+        ${fixes.options.slice(0,5).map(o=>`<div class="fix">
+          <span>pin <b class="ok">${o.pin}</b></span>
+          <span class="muted">&minus;${o.removes} deps · ${o.pct_of_cone}%</span></div>`).join('')}`
+       : `<div class="k" style="margin-top:14px">Highest-leverage single fix</div>
+          <div class="v muted" style="margin-top:5px">
+            ${current} has no dependencies of its own &mdash; it <em>is</em> the
+            chokepoint, so there is nothing beneath it to pin. Select an
+            application root such as <b class="ok">eslint</b> or
+            <b class="ok">webpack</b> to see where one pin removes the most
+            exposure.</div>`}
+    </div>`;
+
+  btn.textContent = 'Detonate'; btn.disabled = false;
+};
+
+$('#btnFit').onclick = () => cy.fit(undefined, 40);
+$('#btnReset').onclick = () => { cy.elements().removeClass('dim hit'); if(current) select(current); };
+
+// ---------- search ----------
+let t;
+$('#search').oninput = e => {
+  clearTimeout(t);
+  const q = e.target.value.trim();
+  if(!q) return;
+  t = setTimeout(async () => {
+    const r = await api('/api/search?q='+encodeURIComponent(q));
+    if(r.results.length) select(r.results[0]);
+  }, 300);
+};
+</script>
+</body>
+</html>
